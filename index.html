@@ -3,27 +3,29 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
-    <meta name="theme-color" content="#111418">
+    <meta name="theme-color" content="#151812">
     <title>Muscle Meter Live</title>
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@500;600;700&family=IBM+Plex+Sans+Thai:wght@400;500;600&display=swap" rel="stylesheet">
     <style>
         :root {
-            --bg: #111418;
-            --panel: #191d23;
-            --panel-2: #20252c;
-            --line: #2a3038;
-            --ink: #f4f5f6;
-            --mute: #8b939e;
-            --faint: #5d6570;
-            --peak: #ff6a1a;
-            --onset: #2bd47d;
-            --rec: #ff3b4e;
-            --trace: #e9edf2;
-            --left: #5ab8ff;
-            --right: #c792ff;
-            --warn: #f5b942;
+            --bg: #151812;
+            --panel: #1c2119;
+            --panel-2: #262c22;
+            --line: #343c2e;
+            --ink: #f4f7f0;
+            --mute: #9ba592;
+            --faint: #646d5c;
+            --peak: #76ca71;
+            --good: #76ca71;
+            --onset: #b9a8ff;
+            --action: #6148aa;
+            --rec: #ef5b5b;
+            --trace: #eef3ea;
+            --left: #9cc2ff;
+            --right: #f2a65e;
+            --warn: #e8cf5a;
             --num: 'Barlow Condensed', 'IBM Plex Sans Thai', system-ui, sans-serif;
             --text: 'IBM Plex Sans Thai', system-ui, 'Segoe UI', sans-serif;
         }
@@ -82,7 +84,7 @@
             transition: background-color .25s, color .25s;
         }
         .detector::before { content: ''; flex: none; width: 10px; height: 10px; border-radius: 50%; background: currentColor; }
-        .detector.ready { background: rgba(43, 212, 125, .14); color: var(--onset); }
+        .detector.ready { background: rgba(118, 202, 113, .16); color: var(--good); }
         .detector.active { background: var(--rec); color: #fff; }
         .detector.active::before { animation: blink 1s steps(2) infinite; }
         @keyframes blink { 50% { opacity: .25; } }
@@ -158,7 +160,7 @@
 
         /* ---- แท็บผล ---- */
         .detail.flash { animation: flash .8s ease-out; }
-        @keyframes flash { from { background: rgba(255, 106, 26, .14); } }
+        @keyframes flash { from { background: rgba(118, 202, 113, .14); } }
         .trial-head { display: flex; align-items: center; gap: 8px 12px; flex-wrap: wrap; }
         .trial-nav { display: flex; align-items: center; gap: 4px; }
         .icon-btn { width: 44px; height: 44px; border-radius: 6px; border: 0; background: var(--panel-2); font-size: 22px; line-height: 1; }
@@ -193,7 +195,7 @@
         tbody tr.sel { background: var(--panel-2); box-shadow: inset 3px 0 0 var(--peak); }
         tbody tr.off td { color: var(--faint); text-decoration: line-through; }
         tbody tr.new { animation: rowIn .6s ease-out; }
-        @keyframes rowIn { from { background: rgba(255, 106, 26, .25); } }
+        @keyframes rowIn { from { background: rgba(118, 202, 113, .25); } }
         .empty-row td { text-align: center; color: var(--mute); font-family: var(--text); font-size: 14px; cursor: default; }
         .row { display: flex; gap: 10px; margin-top: 12px; flex-wrap: wrap; }
         .btn-light { border: 0; border-radius: 6px; padding: 11px 18px; background: var(--panel-2); font-weight: 500; }
@@ -208,7 +210,7 @@
         .guide summary::-webkit-details-marker { display: none; }
         .guide summary::after { content: '+'; color: var(--mute); font-weight: 400; font-size: 20px; line-height: 1; }
         .guide details[open] summary::after { content: '–'; }
-        .guide .body { padding: 0 2px 16px; color: #c9ced5; line-height: 1.7; }
+        .guide .body { padding: 0 2px 16px; color: #cfd7c8; line-height: 1.7; }
         .guide p, .guide ol, .guide dl, .guide ul { margin: 0 0 10px; }
         .guide ol, .guide ul { padding-left: 22px; }
         .guide li { margin-bottom: 6px; }
@@ -245,7 +247,7 @@
         .run.count { box-shadow: inset 0 0 0 2px var(--ink); }
         .run.count .run-count { animation: tick 1s ease-out infinite; }
         @keyframes tick { from { transform: scale(1.15); } to { transform: scale(1); } }
-        .run.go { background: var(--onset); color: #0b0d10; }
+        .run.go { background: var(--good); color: #0b0d10; }
         .run.go .run-step { color: rgba(0, 0, 0, .65); }
         .run.go .btn-light { background: rgba(0, 0, 0, .15); color: #0b0d10; }
         .run.release { background: var(--warn); color: #0b0d10; }
@@ -280,10 +282,10 @@
         .lsi-v { font-family: var(--num); font-size: 22px; font-weight: 500; text-align: right; font-variant-numeric: tabular-nums; }
         .lsi-pct { font-family: var(--num); font-size: 28px; font-weight: 600; text-align: right; line-height: 1; }
         .lsi-pct small { display: block; font-family: var(--text); font-size: 12px; font-weight: 400; color: var(--mute); margin-top: 3px; }
-        .lsi-pct.ok { color: var(--onset); } .lsi-pct.mid { color: var(--warn); } .lsi-pct.low { color: #ff6b78; }
+        .lsi-pct.ok { color: var(--good); } .lsi-pct.mid { color: var(--warn); } .lsi-pct.low { color: #ff6b78; }
         .lsi-bar { position: relative; height: 12px; background: var(--bg); border-radius: 3px; }
         .lsi-bar i { position: absolute; left: 0; top: 0; bottom: 0; border-radius: 3px; transition: width .4s ease-out; }
-        .lsi-bar i.ok { background: var(--onset); } .lsi-bar i.mid { background: var(--warn); } .lsi-bar i.low { background: #ff6b78; }
+        .lsi-bar i.ok { background: var(--good); } .lsi-bar i.mid { background: var(--warn); } .lsi-bar i.low { background: #ff6b78; }
         .lsi-bar b { position: absolute; top: -4px; bottom: -4px; width: 2px; background: var(--ink); opacity: .5; }
         .lsi-bar b.t100 { opacity: .9; }
         .lsi-scale { position: relative; height: 16px; font-family: var(--num); font-size: 12px; color: var(--mute); }
@@ -426,6 +428,26 @@
         @media (prefers-reduced-motion: reduce) {
             *, *::before { animation: none !important; transition: none !important; }
         }
+
+        /* ---- ธีมเขียวธรรมชาติ: มุมโค้งมน ปุ่มแคปซูล ม่วงเป็นปุ่มสั่งงาน เขียวเป็นค่าสำคัญ ---- */
+        body { background: radial-gradient(900px 520px at 0% -8%, rgba(118, 202, 113, .13), transparent 62%), radial-gradient(700px 420px at 100% 110%, rgba(97, 72, 170, .16), transparent 60%), var(--bg); background-attachment: fixed; }
+        .chart-box, .dock { border-radius: 22px; background: rgba(28, 33, 25, .86); box-shadow: 0 1px 0 rgba(255, 255, 255, .04) inset, 0 12px 32px rgba(0, 0, 0, .25); }
+        .peak-display { border-left: 0; border-radius: 18px; box-shadow: inset 4px 0 0 var(--peak); }
+        .connect, .controls > button, .btn-light, .btn-primary, .detector, .mode-badge, .chip { border-radius: 999px; }
+        .connect:not(.on), .btn-plan, .btn-primary { background: var(--action); color: #fff; box-shadow: 0 6px 18px rgba(97, 72, 170, .35); }
+        .btn-tare { background: #fff; color: #151812; }
+        .btn-reset { background: transparent; }
+        .seg { border-radius: 999px; }
+        .seg button { border-radius: 999px; }
+        .icon-btn { border-radius: 50%; }
+        .tiles { border-radius: 14px; }
+        .table-wrap { border-radius: 14px; }
+        .run { border-radius: 20px; }
+        .run-side { border-radius: 14px; }
+        .tabs button.on { color: var(--peak); }
+        .tile.key .value, .peak-display .v { color: var(--peak); }
+        dialog { border-radius: 22px; }
+        .field select { border-radius: 12px; }
     </style>
 </head>
 <body>
@@ -1688,7 +1710,7 @@
         });
 
         // ---- วาดกราฟ ----
-        const C = { grid: '#232930', axis: '#3a424c', text: '#8b939e', trace: '#e9edf2', peak: '#ff6a1a', onset: '#2bd47d' };
+        const C = { grid: '#262d22', axis: '#3e4737', text: '#9ba592', trace: '#eef3ea', peak: '#76ca71', onset: '#b9a8ff' };
         const CHART_FONT = "500 13px 'Barlow Condensed', sans-serif";
 
         function niceStep(range) {
@@ -1866,7 +1888,7 @@
             [[200, .07], [150, .11], [100, .16], [50, .22]].forEach(([ms, a]) => {
                 const seg = r.curve.filter((p) => p.ms >= 0 && p.ms <= ms);
                 if (seg.length < 2) return;
-                c.fillStyle = `rgba(233, 237, 242, ${a})`;
+                c.fillStyle = `rgba(118, 202, 113, ${a + .04})`;
                 c.beginPath();
                 c.moveTo(xOf(0), base);
                 seg.forEach((p) => c.lineTo(xOf(p.ms), yOf(p.n)));
@@ -1924,5 +1946,6 @@
         if (document.fonts) document.fonts.ready.then(drawTrial);
         renderTable();
     </script>
+
 </body>
 </html>

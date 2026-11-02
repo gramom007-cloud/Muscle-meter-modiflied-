@@ -448,6 +448,32 @@
         .tile.key .value, .peak-display .v { color: var(--peak); }
         dialog { border-radius: 22px; }
         .field select { border-radius: 12px; }
+
+        /* ---- จุดอ่านค่าบนกราฟรายครั้ง ---- */
+        #cursorLayer { touch-action: none; cursor: crosshair; outline: none; }
+        .chart-box:not(.trial) #cursorLayer, .chart-box:not(.trial) .readout { display: none; }
+        .readout { min-width: 0; display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: center; gap: 6px 10px; margin: 8px 10px 0; padding: 6px 6px 6px 14px; border-radius: 14px; background: var(--bg); }
+        .ro-vals { font-size: 13px; color: var(--mute); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+        .ro-vals b { font-family: var(--num); font-size: 22px; font-weight: 600; color: var(--ink); margin-right: 3px; }
+        .ro-vals .pk b { color: var(--peak); }
+        .ro-vals i { font-style: normal; color: var(--faint); margin: 0 8px; }
+        .ro-nudge { display: flex; gap: 4px; }
+        .ro-nudge button { width: 36px; height: 36px; border: 0; border-radius: 50%; background: var(--panel-2); font-size: 18px; line-height: 1; }
+        .ro-nudge button:disabled { opacity: .35; cursor: default; }
+        .ro-snap { grid-column: 1 / -1; min-width: 0; display: flex; gap: 6px; overflow-x: auto; scrollbar-width: none; margin-left: -8px; }
+        .ro-snap::-webkit-scrollbar { display: none; }
+        .ro-snap button { flex: none; border: 0; border-radius: 999px; padding: 4px 11px; font-size: 13px; background: var(--panel-2); color: var(--mute); }
+        .ro-snap button.on { background: var(--peak); color: #151812; font-weight: 600; }
+        @media (hover: hover) { .ro-snap button:not(.on):hover, .ro-nudge button:not(:disabled):hover { color: var(--ink); background: var(--line); } }
+        @media (max-width: 599px) {
+            .readout { margin: 6px 6px 0; padding: 4px 4px 4px 10px; gap: 4px 6px; }
+            .ro-vals b { font-size: 19px; }
+            .ro-vals i { margin: 0 5px; }
+            .ro-vals .hide-sm { display: none; }
+            .ro-nudge button { width: 34px; height: 34px; }
+            .app:not(.running):has(.chart-box.trial) { grid-template-rows: auto auto auto auto minmax(260px, 1.5fr) minmax(160px, 1fr); }
+        }
+        @media (pointer: coarse) { .ro-snap button { padding: 7px 13px; font-size: 14px; } .ro-nudge button { width: 40px; height: 40px; } }
     </style>
 </head>
 <body>
@@ -509,7 +535,7 @@
                 <button data-view="trial" id="viewTrialBtn" disabled>ครั้งที่ –</button>
             </div>
             <div id="rangeSeg" class="seg" role="group" aria-label="ช่วงของกราฟ" hidden>
-                <button data-range="all" class="on">ทั้งครั้ง</button>
+                <button data-range="all" class="on">ดูกราฟเต็ม</button>
                 <button data-range="300">300 ms<span class="lg"> แรก</span></button>
             </div>
             <div id="trialLegend" class="legend" hidden>
@@ -518,9 +544,19 @@
                 <span><i style="color:var(--mute)"></i>80% peak</span>
             </div>
         </div>
+        <div id="readout" class="readout">
+            <div id="roVals" class="ro-vals">แตะหรือลากบนกราฟเพื่อดูค่าแต่ละจุด</div>
+            <div class="ro-nudge">
+                <button id="roPrev" aria-label="จุดก่อนหน้า" disabled>‹</button>
+                <button id="roNext" aria-label="จุดถัดไป" disabled>›</button>
+                <button id="roClear" aria-label="ซ่อนจุด" disabled>✕</button>
+            </div>
+            <div id="roSnap" class="ro-snap" role="group" aria-label="ไปที่จุดสำคัญ"></div>
+        </div>
         <div class="plot">
             <canvas id="chart" aria-label="กราฟแรงย้อนหลัง 10 วินาที"></canvas>
             <canvas id="trialChart" aria-label="กราฟแรงของครั้งที่เลือก" hidden></canvas>
+            <canvas id="cursorLayer" tabindex="0" aria-label="ลากเพื่อดูค่าแต่ละจุด ใช้ลูกศรซ้าย/ขวาเลื่อนทีละจุด"></canvas>
             <div id="trialEmpty" class="empty">ยังไม่มีผล ออกแรงครั้งแรกแล้วผลจะขึ้นที่นี่</div>
         </div>
     </section>
@@ -1201,6 +1237,7 @@
         const tctx = trialCanvas.getContext('2d');
         const TRIAL_PRE_MS = 300;    // เก็บกราฟก่อน onset ไว้ดู pretension
         let selected = null;         // ผลของครั้งที่กำลังดู
+        let trialMap = null, cursorMs = null;   // สเกลของกราฟรายครั้ง และตำแหน่งจุดชี้ (ms จาก onset)
         let trialRange = 'all';      // 'all' = ทั้งครั้ง, '300' = 300 ms แรก
         const SIDE_NAME = { L: 'ซ้าย', R: 'ขวา' };
         let currentSide = '';        // ข้างที่จะติดให้ครั้งถัดไป: '', 'L', 'R'
@@ -1210,7 +1247,12 @@
 
         function showResult(r) {
             // เก็บเส้นแรงดิบของครั้งนี้ไว้ดูภายหลัง (เวลาเป็น ms นับจาก onset)
-            r.curve = samples.filter((s) => s.t >= r.onsetT - TRIAL_PRE_MS).map((s) => ({ ms: s.t - r.onsetT, n: s.n }));
+            // เวลาที่ packet มาถึงแกว่ง จึงนับเวลาจากลำดับเฟรม ÷ ความถี่ ให้ตรงกับที่ใช้คำนวณผล
+            const k0 = samples.findIndex((s) => s.t === r.onsetT);
+            const pre = Math.ceil(TRIAL_PRE_MS / 1000 * r.fs);
+            r.curve = k0 < 0
+                ? samples.filter((s) => s.t >= r.onsetT - TRIAL_PRE_MS).map((s) => ({ ms: s.t - r.onsetT, n: s.n }))
+                : samples.slice(Math.max(0, k0 - pre)).map((s, k) => ({ ms: (k + Math.max(0, k0 - pre) - k0) * 1000 / r.fs, n: s.n }));
             r.excluded = false;
             r.note = '';
             r.side = currentSide;
@@ -1287,6 +1329,7 @@
         }
 
         function selectTrial(r, isNew) {
+            if (r !== selected) cursorMs = null;
             selected = r;
             const i = trials.indexOf(r);
             prevBtn.disabled = !r || i <= 0;
@@ -1842,7 +1885,8 @@
         function drawTrial() {
             const [w, h] = fitCanvas(trialCanvas, tctx);
             const r = selected;
-            if (!r || !r.curve || r.curve.length < 2) return;
+            trialMap = null;
+            if (!r || !r.curve || r.curve.length < 2) { drawCursor(); return; }
 
             const padL = 52, padR = 14, padT = 14, padB = 28;
             const plotW = w - padL - padR, plotH = h - padT - padB;
@@ -1857,6 +1901,7 @@
             const yMin = Math.floor(vMin / step) * step;
             const xOf = (ms) => padL + (ms - x0) / (x1 - x0) * plotW;
             const yOf = (n) => padT + (1 - (n - yMin) / (yMax - yMin)) * plotH;
+            trialMap = { r, xOf, yOf, x0, x1, padL, padT, plotW, plotH };
             const c = tctx;
 
             c.font = CHART_FONT;
@@ -1922,7 +1967,7 @@
             c.stroke();
 
             // peak
-            const pMs = r.peakT - r.onsetT;
+            const pMs = r.ttpMs;
             if (pMs >= x0 && pMs <= x1) {
                 c.fillStyle = C.peak;
                 c.beginPath(); c.arc(xOf(pMs), yOf(r.peakAbsN), 5, 0, Math.PI * 2); c.fill();
@@ -1939,7 +1984,112 @@
                 c.fillStyle = C.text;
                 c.fillText(`80% · ${Math.round(r.t80Ms)} ms`, xOf(r.t80Ms) + 5, padT + 18);
             }
+            drawCursor();
         }
+
+        // ---- จุดอ่านค่าบนกราฟรายครั้ง: แตะ/ลาก, ‹ › ทีละจุด, หรือกระโดดไปจุดสำคัญ ----
+        const curCanvas = document.getElementById('cursorLayer');
+        const cctx = curCanvas.getContext('2d');
+        const roVals = document.getElementById('roVals');
+        const roSnap = document.getElementById('roSnap');
+        const roBtns = ['roPrev', 'roNext', 'roClear'].map((id) => document.getElementById(id));
+        const SNAPS = [['onset', () => 0], ['50 ms', () => 50], ['100 ms', () => 100], ['150 ms', () => 150], ['200 ms', () => 200],
+            ['80% Peak', (r) => r.t80Ms], ['Peak', (r) => r.ttpMs]];
+        roSnap.innerHTML = SNAPS.map(([name], k) => `<button data-k="${k}">${name}</button>`).join('');
+
+        function nearestIdx(curve, ms) {
+            let lo = 0, hi = curve.length - 1;
+            while (hi - lo > 1) { const mid = (lo + hi) >> 1; if (curve[mid].ms < ms) lo = mid; else hi = mid; }
+            return Math.abs(curve[lo].ms - ms) <= Math.abs(curve[hi].ms - ms) ? lo : hi;
+        }
+
+        function setCursor(ms) {
+            cursorMs = ms;
+            drawCursor();
+        }
+
+        function drawCursor() {
+            const [w, h] = fitCanvas(curCanvas, cctx);
+            const m = trialMap;
+            const on = !!(m && cursorMs !== null);
+            roBtns.forEach((b) => { b.disabled = !on; });
+            roSnap.querySelectorAll('button').forEach((b) => b.classList.remove('on'));
+            if (!m) { roVals.textContent = 'แตะหรือลากบนกราฟเพื่อดูค่าแต่ละจุด'; return; }
+            if (!on) { roVals.textContent = 'แตะหรือลากบนกราฟเพื่อดูค่าแต่ละจุด'; return; }
+
+            // ใช้เส้นที่กรอง 50 Hz แบบเดียวกับตอนคำนวณผล และแรงสุทธิ = แรง − แรง ณ onset (นิยามเดียวกับ Force ＠ X ms)
+            const r = m.r;
+            if (!r.curveF) r.curveF = lowPassZeroLag(r.curve.map((q) => q.n), r.fs, FILTER_CUTOFF_HZ);
+            const i = nearestIdx(r.curve, cursorMs), p = { ms: r.curve[i].ms, n: r.curveF[i] };
+            const base = r.curveF[nearestIdx(r.curve, 0)], net = p.n - base, pct = net / (r.peakAbsN - base) * 100;
+            const ms = Math.round(p.ms);
+            roVals.innerHTML = `<b>${ms}</b>ms<i>|</i><b>${net.toFixed(1)}</b>N <span class="hide-sm">สุทธิ</span><i>|</i><span class="pk"><b>${Math.round(pct)}</b>%</span> <span class="hide-sm">ของ Peak</span>`;
+            SNAPS.forEach(([, f], k) => { const v = f(r); if (v !== null && nearestIdx(r.curve, v) === nearestIdx(r.curve, cursorMs)) roSnap.children[k].classList.add('on'); });
+            if (p.ms < m.x0 || p.ms > m.x1) return;
+
+            const x = m.xOf(p.ms), y = m.yOf(p.n), c = cctx;
+            c.strokeStyle = 'rgba(244, 247, 240, .55)';
+            c.lineWidth = 1;
+            c.beginPath(); c.moveTo(x, m.padT); c.lineTo(x, m.padT + m.plotH); c.stroke();
+            c.setLineDash([2, 4]);
+            c.beginPath(); c.moveTo(m.padL, y); c.lineTo(x, y); c.stroke();
+            c.setLineDash([]);
+            c.fillStyle = '#151812';
+            c.beginPath(); c.arc(x, y, 7, 0, Math.PI * 2); c.fill();
+            c.strokeStyle = C.peak; c.lineWidth = 3;
+            c.beginPath(); c.arc(x, y, 6, 0, Math.PI * 2); c.stroke();
+
+            // ป้ายตัวเลขข้างจุด (กลับด้านเมื่อชิดขอบ)
+            const label = `${ms} ms · ${net.toFixed(1)} N`;
+            c.font = "600 15px 'Barlow Condensed', sans-serif";
+            const tw = c.measureText(label).width + 16, th = 26;
+            let lx = x + 12, ly = y - th - 10;
+            if (lx + tw > w - 6) lx = x - 12 - tw;
+            if (ly < 2) ly = y + 12;
+            c.fillStyle = 'rgba(21, 24, 18, .92)';
+            c.beginPath(); c.roundRect ? c.roundRect(lx, ly, tw, th, 13) : c.rect(lx, ly, tw, th); c.fill();
+            c.fillStyle = '#f4f7f0';
+            c.textBaseline = 'middle'; c.textAlign = 'left';
+            c.fillText(label, lx + 8, ly + th / 2 + 1);
+        }
+
+        function msFromEvent(e) {
+            const m = trialMap; if (!m) return null;
+            const x = e.clientX - curCanvas.getBoundingClientRect().left;
+            return Math.max(m.x0, Math.min(m.x1, m.x0 + (x - m.padL) / m.plotW * (m.x1 - m.x0)));
+        }
+        curCanvas.addEventListener('pointerdown', (e) => { curCanvas.setPointerCapture(e.pointerId); const v = msFromEvent(e); if (v !== null) setCursor(v); });
+        curCanvas.addEventListener('pointermove', (e) => {
+            if (!e.buttons) return;
+            const v = msFromEvent(e); if (v !== null) setCursor(v);
+        });
+        function step(d) {
+            const m = trialMap; if (!m || cursorMs === null) return;
+            const c = m.r.curve, i = Math.max(0, Math.min(c.length - 1, nearestIdx(c, cursorMs) + d));
+            setCursor(Math.max(m.x0, Math.min(m.x1, c[i].ms)));
+        }
+        curCanvas.addEventListener('keydown', (e) => {
+            if (e.key === 'ArrowLeft' || e.key === 'ArrowRight') {
+                e.preventDefault();
+                if (cursorMs === null) { setCursor(0); return; }
+                step((e.key === 'ArrowLeft' ? -1 : 1) * (e.shiftKey ? 10 : 1));
+            } else if (e.key === 'Escape') setCursor(null);
+        });
+        // กดค้างที่ ‹ › เพื่อเลื่อนต่อเนื่อง
+        [[roBtns[0], -1], [roBtns[1], 1]].forEach(([b, d]) => {
+            let t = null;
+            const stop = () => { clearTimeout(t); clearInterval(t); t = null; };
+            b.addEventListener('pointerdown', () => { step(d); t = setTimeout(() => { t = setInterval(() => step(d), 40); }, 350); });
+            ['pointerup', 'pointerleave', 'pointercancel'].forEach((ev) => b.addEventListener(ev, stop));
+        });
+        roBtns[2].addEventListener('click', () => setCursor(null));
+        roSnap.addEventListener('click', (e) => {
+            const b = e.target.closest('button'); if (!b || !trialMap) return;
+            const v = SNAPS[+b.dataset.k][1](trialMap.r);
+            if (v === null) return;
+            if (v < trialMap.x0 || v > trialMap.x1) { trialRange = 'all'; setSeg(rangeSegElem, 'range', 'all'); }
+            cursorMs = v; drawTrial();
+        });
 
         window.addEventListener('resize', drawTrial);
         if (window.ResizeObserver) new ResizeObserver(() => { if (chartView === 'trial') drawTrial(); }).observe(trialCanvas.parentElement);

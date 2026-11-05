@@ -743,7 +743,7 @@
             <details>
                 <summary>การทดสอบแบบมีขั้นตอนและการเทียบซ้าย/ขวา (LSI)</summary>
                 <div class="body">
-                    <p><b>ทดสอบแบบมีขั้นตอน:</b> กด "ทดสอบแบบมีขั้นตอน" แล้วเลือกข้าง ลำดับ จำนวนครั้ง และเวลาพัก แอปจะบอกให้ออกแรงเบา ๆ ให้สายตึง รอให้แรงนิ่ง นับถอยหลัง 3-2-1 พร้อมเสียง แล้วส่งสัญญาณให้ออกแรง "เร็วและแรง แล้วค้างไว้!" ระหว่างค้างแรงจะนับถอยหลังพร้อมแถบเวลาและเสียงติ๊กทุกวินาที ครบเวลาที่ตั้ง (3–5 วินาที) จะมีเสียงต่ำยาวสองครั้งบอกให้คลายแรง จากนั้นนับเวลาพักและเปลี่ยนข้างให้เอง ครั้งที่ออกแรงก่อนสัญญาณ ออกแรงระหว่างพัก หรือปล่อยแรงก่อนครบเวลา จะถูกตั้งเป็น "ไม่นับ" อัตโนมัติ และครั้งที่ปล่อยเร็วเกินไปจะให้ทำครั้งนั้นใหม่ ถ้าไม่ได้ยินเสียง กด "ทดสอบเสียง" ในหน้าตั้งค่า เปิดเสียงเครื่อง และบน iPad/iPhone ให้ปิดโหมดเงียบ</p>
+                    <p><b>ทดสอบแบบมีขั้นตอน:</b> กด "ทดสอบแบบมีขั้นตอน" แล้วเลือกข้าง ลำดับ จำนวนครั้ง และเวลาพัก แอปจะบอกให้ออกแรงเบา ๆ ให้สายตึง รอให้แรงนิ่ง นับถอยหลัง 3-2-1 พร้อมปี๊บต่ำสั้น แล้วปี๊บสูงยาว (แบบปล่อยตัวแข่งรถ) ส่งสัญญาณให้ออกแรง "เร็วและแรง แล้วค้างไว้!" ระหว่างค้างแรงจะนับถอยหลังพร้อมแถบเวลาและเสียงติ๊กทุกวินาที ครบเวลาที่ตั้ง (3–5 วินาที) จะมีเสียงติ๊ง-ต่องบอกให้คลายแรง จากนั้นนับเวลาพักและเปลี่ยนข้างให้เอง ครั้งที่ออกแรงก่อนสัญญาณ ออกแรงระหว่างพัก หรือปล่อยแรงก่อนครบเวลา จะถูกตั้งเป็น "ไม่นับ" อัตโนมัติ และครั้งที่ปล่อยเร็วเกินไปจะให้ทำครั้งนั้นใหม่ ถ้าไม่ได้ยินเสียง กด "ทดสอบเสียง" ในหน้าตั้งค่า เปิดเสียงเครื่อง และบน iPad/iPhone ให้ปิดโหมดเงียบ</p>
                     <p><b>LSI (Limb Symmetry Index)</b> = ค่าของข้างที่บาดเจ็บ ÷ ค่าของข้างปกติ × 100 ถ้าไม่ระบุข้างที่บาดเจ็บ จะใช้ข้างที่ค่าน้อยกว่า ÷ ข้างที่มากกว่า เลือกได้ว่าจะใช้ค่าที่ดีที่สุดหรือค่าเฉลี่ยของครั้งที่นับในแต่ละข้าง</p>
                     <p>เกณฑ์ที่ใช้บ่อยก่อนกลับไปเล่นกีฬาหลังผ่าตัด ACL คือ LSI ≥ 90% (แถบสีเขียว) 80–90% เป็นสีเหลือง และต่ำกว่า 80% เป็นสีแดง LSI ของ RFD มักต่ำกว่าของ Peak Force ในผู้ป่วยกลุ่มเดียวกัน จึงควรดูทั้งสองค่า</p>
                     <p>ข้อควรระวัง: LSI ดูสูงได้ถ้าข้างปกติก็อ่อนแรงลงด้วย (เช่น ไม่ได้ออกกำลังหลังบาดเจ็บ) ควรเทียบกับค่าก่อนบาดเจ็บหรือค่าอ้างอิงของกลุ่มเดียวกันเมื่อมี</p>
@@ -1520,18 +1520,20 @@
             if (document.visibilityState === 'visible' && audioCtx && audioCtx.state !== 'running') audioCtx.resume().catch(() => { });
         });
 
-        function beep(freq, dur, vol = 0.3) {
-            if (plan.sound) tone(freq, dur, vol);
+        function beep(freq, dur, vol = 0.3, type = 'sine', at = 0) {
+            if (plan.sound) tone(freq, dur, vol, type, at);
         }
-        function tone(freq, dur, vol) {
+        // at = เลื่อนเวลาเริ่ม (วินาที) ตามนาฬิกาเสียง จังหวะจึงแม่นกว่า setTimeout
+        function tone(freq, dur, vol, type = 'sine', at = 0) {
             try {
                 if (!audioCtx) unlockAudio();
                 if (audioCtx.state !== 'running') audioCtx.resume();
-                const t = audioCtx.currentTime;
+                const t = audioCtx.currentTime + at;
                 const o = audioCtx.createOscillator(), g = audioCtx.createGain();
-                o.type = 'sine';
+                o.type = type;
                 o.frequency.value = freq;
-                g.gain.setValueAtTime(vol, t);
+                g.gain.setValueAtTime(0.0001, t);
+                g.gain.exponentialRampToValueAtTime(vol, t + 0.01);   // ไต่ขึ้นสั้น ๆ กันเสียงคลิก
                 g.gain.exponentialRampToValueAtTime(0.0001, t + dur);
                 o.connect(g).connect(audioCtx.destination);
                 o.start(t);
@@ -1542,11 +1544,18 @@
             const ua = navigator.userActivation;
             try { if (navigator.vibrate && (!ua || ua.hasBeenActive)) navigator.vibrate(ms); } catch (e) { }
         };
-        // สัญญาณแต่ละแบบ แยกให้ฟังออกจากกัน
+        // สัญญาณแต่ละแบบ แยกให้ฟังออกจากกัน: นับถอยหลัง + เริ่ม = ปล่อยตัวแข่งรถ, หยุด = ติ๊ง-ต่อง
+        const SOUND = {
+            count: [[440, 0.16, 0.12, 'square']],                                  // ปี๊บต่ำสั้น
+            go: [[880, 0.75, 0.14, 'square']],                                     // ปี๊บสูงยาว
+            stop: [[784, 0.6, 0.4, 'triangle'], [523, 0.9, 0.4, 'triangle', 0.35]],  // ติ๊ง-ต่อง (ซอล-โด)
+        };
+        const playSound = (name, force) => { if (force || plan.sound) SOUND[name].forEach((a) => tone(...a)); };
         const cue = {
-            go: () => { beep(1320, 0.55, 0.4); vibrate(300); },                                 // เริ่มออกแรง: สูง ยาว
+            count: () => playSound('count'),                                                     // นับถอยหลัง 3-2-1
+            go: () => { playSound('go'); vibrate(300); },                                       // เริ่มออกแรง
             tick: () => beep(1000, 0.05, 0.12),                                                  // ระหว่างค้างแรง: ติ๊กเบา ๆ ทุกวินาที
-            stop: () => { beep(440, 0.35, 0.4); setTimeout(() => beep(440, 0.35, 0.4), 450); vibrate([200, 120, 200]); },  // คลายแรง: ต่ำ ยาว สองครั้ง
+            stop: () => { playSound('stop'); vibrate([200, 120, 200]); },                       // คลายแรง
             saved: () => { beep(988, 0.12); setTimeout(() => beep(1319, 0.18), 130); },       // บันทึกแล้ว: ขึ้นสองโน้ต
             error: () => { beep(392, 0.18, 0.35); setTimeout(() => beep(262, 0.45, 0.35), 200); vibrate([80, 60, 80, 60, 80]); },  // ผิดพลาด: ลงสองโน้ต
         };
@@ -1693,7 +1702,7 @@
                     setPhase('go');
                     cue.go();
                 } else {
-                    if (n !== run.lastCount) { run.lastCount = n; beep(880, 0.12); }
+                    if (n !== run.lastCount) { run.lastCount = n; cue.count(); }
                     msg = 'เตรียมออกแรง';
                     count = n;
                 }
@@ -1768,11 +1777,12 @@
             try { localStorage.setItem(PLAN_KEY, JSON.stringify(plan)); } catch (e) { }
             startRun();
         });
-        // ทดสอบเสียง: เล่นสัญญาณเริ่มออกแรงแล้วตามด้วยสัญญาณคลายแรง แม้จะปิดเสียงไว้
+        // ทดสอบเสียง: นับถอยหลัง 3 ครั้ง → เสียงเริ่ม → เสียงหยุด แม้จะปิดเสียงไว้
         document.getElementById('pSoundTest').addEventListener('click', () => {
             unlockAudio();
-            tone(1320, 0.55, 0.4);
-            setTimeout(() => { tone(440, 0.35, 0.4); setTimeout(() => tone(440, 0.35, 0.4), 450); }, 900);
+            [0, 600, 1200].forEach((ms) => setTimeout(() => playSound('count', true), ms));
+            setTimeout(() => playSound('go', true), 1800);
+            setTimeout(() => playSound('stop', true), 3000);
         });
         document.getElementById('runStop').addEventListener('click', stopRun);
         runSkipBtn.addEventListener('click', () => { if (run && run.phase === 'rest') setPhase('prep'); });

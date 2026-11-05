@@ -504,6 +504,22 @@
             .side-pick .seg button { flex: 1; }
             .xl { display: none; }
         }
+
+        /* ---- ลากปรับขนาดแท็บผล ---- */
+        .splitter { position: fixed; z-index: 5; display: grid; place-items: center; touch-action: none; outline: none; }
+        .splitter.h { height: 26px; cursor: row-resize; }
+        .splitter.v { width: 26px; cursor: col-resize; }
+        .splitter i { display: block; border-radius: 999px; background: var(--faint); transition: background-color .15s, transform .15s; }
+        .splitter.h i { width: 48px; height: 5px; }
+        .splitter.v i { width: 5px; height: 48px; }
+        .splitter:focus-visible i, .splitter.drag i { background: var(--peak); }
+        @media (hover: hover) { .splitter:hover i { background: var(--peak); } }
+        .splitter.drag i { transform: scale(1.25); }
+        body.resizing { cursor: row-resize; user-select: none; -webkit-user-select: none; }
+        body.resizing.v { cursor: col-resize; }
+        /* ขนาดที่ผู้ใช้ลากไว้ ทับสัดส่วนเริ่มต้นทุกแบบ (ทั้งตอนทดสอบและตอนดูกราฟรายครั้ง) */
+        .app.sized-h { grid-template-rows: auto auto auto auto minmax(120px, 1fr) var(--dock-h) !important; }
+        .app.sized-w { grid-template-columns: minmax(0, 1fr) var(--dock-w) !important; }
     </style>
 </head>
 <body>
@@ -592,6 +608,7 @@
         </div>
     </section>
 
+    <div id="splitter" class="splitter" role="separator" tabindex="0" aria-label="ลากเพื่อปรับขนาดแท็บผล แตะสองครั้งเพื่อคืนค่าเดิม" title="ลากเพื่อปรับขนาด · แตะสองครั้งเพื่อคืนค่าเดิม" hidden><i></i></div>
     <section class="dock">
         <nav class="tabs" role="tablist">
             <button role="tab" data-tab="result" class="on" aria-selected="true">ผล</button>
@@ -2230,6 +2247,88 @@
             if (v < trialMap.x0 || v > trialMap.x1) { trialRange = 'all'; setSeg(rangeSegElem, 'range', 'all'); }
             cursorMs = v; drawTrial();
         });
+
+
+        // ---- ลากปรับขนาดแท็บผล: จอเรียงบน-ล่างลากขึ้นลง, จอเรียงซ้าย-ขวาลากซ้ายขวา ----
+        const DOCK_KEY = 'mm-dock';
+        const splitterElem = document.getElementById('splitter');
+        const dockElem = document.querySelector('.dock');
+        let dockSize = {};
+        try { dockSize = JSON.parse(localStorage.getItem(DOCK_KEY)) || {}; } catch (e) { }
+        let splitMode = null;   // 'h' = ลากขึ้นลง, 'v' = ลากซ้ายขวา, null = ปิด (จอเตี้ย หน้าเลื่อนได้)
+
+        function applyDockSize() {
+            appElem.classList.remove('sized-h', 'sized-w');
+            const c = chartBoxElem.getBoundingClientRect(), d = dockElem.getBoundingClientRect();
+            splitMode = innerHeight < 560 ? null : d.left >= c.right - 1 ? 'v' : 'h';
+            if (splitMode === 'h' && dockSize.h) { appElem.style.setProperty('--dock-h', dockSize.h + 'px'); appElem.classList.add('sized-h'); }
+            if (splitMode === 'v' && dockSize.w) { appElem.style.setProperty('--dock-w', dockSize.w + 'px'); appElem.classList.add('sized-w'); }
+            placeSplitter();
+        }
+        function placeSplitter() {
+            splitterElem.hidden = !splitMode;
+            if (!splitMode) return;
+            const c = chartBoxElem.getBoundingClientRect(), d = dockElem.getBoundingClientRect();
+            splitterElem.className = 'splitter ' + splitMode + (splitterElem.classList.contains('drag') ? ' drag' : '');
+            const st = splitterElem.style;
+            if (splitMode === 'h') {
+                st.left = d.left + 'px'; st.width = d.width + 'px'; st.height = ''; st.top = ((c.bottom + d.top) / 2 - 13) + 'px';
+            } else {
+                st.top = d.top + 'px'; st.height = d.height + 'px'; st.width = ''; st.left = ((c.right + d.left) / 2 - 13) + 'px';
+            }
+        }
+        // ขนาดที่ลากได้: แท็บไม่เล็กกว่า 120 px (กว้าง 300 px) และกราฟเหลืออย่างน้อย 150 px (กว้าง 320 px)
+        function setDockSize(px, save) {
+            const c = chartBoxElem.getBoundingClientRect(), d = dockElem.getBoundingClientRect();
+            if (splitMode === 'h') {
+                dockSize.h = Math.round(Math.max(120, Math.min(px, d.bottom - c.top - 150 - 10)));
+                appElem.style.setProperty('--dock-h', dockSize.h + 'px'); appElem.classList.add('sized-h');
+            } else {
+                dockSize.w = Math.round(Math.max(300, Math.min(px, d.right - c.left - 320 - 20)));
+                appElem.style.setProperty('--dock-w', dockSize.w + 'px'); appElem.classList.add('sized-w');
+            }
+            placeSplitter();
+            if (save) try { localStorage.setItem(DOCK_KEY, JSON.stringify(dockSize)); } catch (e) { }
+        }
+        function resetDockSize() {
+            if (splitMode === 'h') delete dockSize.h; else delete dockSize.w;
+            try { localStorage.setItem(DOCK_KEY, JSON.stringify(dockSize)); } catch (e) { }
+            applyDockSize();
+        }
+
+        splitterElem.addEventListener('pointerdown', (e) => {
+            if (!splitMode) return;
+            e.preventDefault();
+            splitterElem.setPointerCapture(e.pointerId);
+            splitterElem.classList.add('drag');
+            document.body.classList.add('resizing', splitMode);
+            const d = dockElem.getBoundingClientRect();
+            const move = (ev) => setDockSize(splitMode === 'h' ? d.bottom - ev.clientY : d.right - ev.clientX, false);
+            const up = () => {
+                splitterElem.classList.remove('drag');
+                document.body.classList.remove('resizing', 'h', 'v');
+                splitterElem.removeEventListener('pointermove', move);
+                splitterElem.removeEventListener('pointerup', up);
+                splitterElem.removeEventListener('pointercancel', up);
+                setDockSize(splitMode === 'h' ? dockElem.getBoundingClientRect().height : dockElem.getBoundingClientRect().width, true);
+            };
+            splitterElem.addEventListener('pointermove', move);
+            splitterElem.addEventListener('pointerup', up);
+            splitterElem.addEventListener('pointercancel', up);
+        });
+        // แตะสองครั้ง (หรือดับเบิลคลิก) = คืนขนาดเริ่มต้น
+        let lastTap = 0;
+        splitterElem.addEventListener('pointerup', () => { const t = performance.now(); if (t - lastTap < 320) resetDockSize(); lastTap = t; });
+        splitterElem.addEventListener('keydown', (e) => {
+            const r = dockElem.getBoundingClientRect(), cur = splitMode === 'h' ? r.height : r.width, step = e.shiftKey ? 60 : 20;
+            const grow = splitMode === 'h' ? 'ArrowUp' : 'ArrowLeft', shrink = splitMode === 'h' ? 'ArrowDown' : 'ArrowRight';
+            if (e.key === grow) { e.preventDefault(); setDockSize(cur + step, true); }
+            else if (e.key === shrink) { e.preventDefault(); setDockSize(cur - step, true); }
+            else if (e.key === 'Enter' || e.key === 'Home') { e.preventDefault(); resetDockSize(); }
+        });
+        addEventListener('resize', applyDockSize);
+        if (window.ResizeObserver) new ResizeObserver(placeSplitter).observe(appElem);
+        applyDockSize();
 
         window.addEventListener('resize', drawTrial);
         if (window.ResizeObserver) new ResizeObserver(() => { if (chartView === 'trial') drawTrial(); }).observe(trialCanvas.parentElement);

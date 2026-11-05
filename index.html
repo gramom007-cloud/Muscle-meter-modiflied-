@@ -246,6 +246,7 @@
         .run-hold i { display: block; height: 100%; width: 0; border-radius: inherit; background: #151812; transition: width .1s linear; }
         .field-ctl { display: flex; align-items: center; gap: 12px; }
         .field-ctl .btn-light { padding: 8px 14px; }
+        .snd-state { font-size: 13px; color: var(--mute); padding: 8px 0 0; line-height: 1.45; }
         .run-count { font-size: 96px; font-weight: 700; line-height: .9; min-width: 110px; text-align: center; }
         .run-ctl { display: flex; flex-direction: column; gap: 8px; }
         .run.count { box-shadow: inset 0 0 0 2px var(--ink); }
@@ -478,6 +479,31 @@
             .app:not(.running):has(.chart-box.trial) { grid-template-rows: auto auto auto auto minmax(260px, 1.5fr) minmax(160px, 1fr); }
         }
         @media (pointer: coarse) { .ro-snap button { padding: 7px 13px; font-size: 14px; } .ro-nudge button { width: 40px; height: 40px; } }
+
+        /* ---- iPad แนวนอน (จอสัมผัส): สัดส่วน Golden ratio กราฟสูงเต็มจอทางซ้าย 1.618 ส่วน
+                ตัวเลข ปุ่ม และแท็บรวมกันทางขวา 1 ส่วน (คอมและจออื่นใช้เลย์เอาต์เดิม) ---- */
+        @media (min-width: 960px) and (min-height: 560px) and (orientation: landscape) and (pointer: coarse) {
+            .app, .app.running, .app:not(.running):has(.chart-box.trial) {
+                grid-template-columns: minmax(0, 1.618fr) minmax(340px, 1fr); column-gap: 20px;
+                grid-template-areas: "head head" "run run" "chart meter" "chart ctl" "chart dock";
+                grid-template-rows: auto auto auto auto minmax(0, 1fr);
+            }
+            .app > .chart-box { margin-bottom: 0; }
+            .meter { grid-template-areas: "det badge" "live live" "peak peak"; row-gap: 6px; align-items: start; }
+            #forceValue { font-size: clamp(84px, 8vw, 132px); }
+            .unit { font-size: 38px; }
+            .newton { font-size: 24px; margin-top: 6px; }
+            .peak-display { min-width: 0; display: flex; align-items: baseline; flex-wrap: wrap; gap: 0 12px; padding: 6px 16px 8px; }
+            .peak-display .lbl { width: 100%; }
+            .peak-display .v { font-size: 48px; }
+            .controls { flex-wrap: wrap; }
+            .controls > button { flex: 1 1 auto; height: 48px; }
+            .btn-plan { margin-left: 0; }
+            .side-pick { flex: 1 1 100%; order: 5; }
+            .side-pick .seg { flex: 1; }
+            .side-pick .seg button { flex: 1; }
+            .xl { display: none; }
+        }
     </style>
 </head>
 <body>
@@ -793,6 +819,7 @@
                 <select id="pHold"><option value="3">3 วินาที</option><option value="4" selected>4 วินาที</option><option value="5">5 วินาที</option></select></div>
             <div class="field"><label for="pSound">เสียงสัญญาณ</label>
                 <span class="field-ctl"><button type="button" id="pSoundTest" class="btn-light">ทดสอบเสียง</button><input id="pSound" type="checkbox" checked></span></div>
+            <div id="pSoundState" class="snd-state" hidden></div>
             <div class="dlg-actions">
                 <button value="cancel" class="btn-light">ยกเลิก</button>
                 <button value="start" class="btn-primary">เริ่มทดสอบ</button>
@@ -1501,9 +1528,28 @@
         // ---- เสียงสัญญาณ ----
         // iOS/Safari และ Chrome เปิดเสียงได้เฉพาะหลังผู้ใช้แตะหน้าจอ จึงปลดล็อกตั้งแต่การแตะครั้งแรก (เช่นกด Connect)
         // และสั่ง resume ซ้ำทุกครั้งที่ context ถูกพักไว้ (สลับแอป ล็อกจอ)
-        let audioCtx = null;
+        // บน iPad/iPhone Web Audio จะเงียบเมื่อเปิดโหมดเงียบ (สวิตช์/ปุ่มกระดิ่ง) แต่ <audio> ไม่เงียบ
+        // จึงเล่นไฟล์เสียงเงียบวนไว้ระหว่างเปิดหน้า ให้ iOS สลับเสียงของหน้านี้เป็นแบบ "เล่นสื่อ" แล้ว Web Audio จะดังด้วย
+        let audioCtx = null, unmuteElem = null;
+        function silentWavUrl() {
+            const rate = 8000, n = rate / 2, buf = new ArrayBuffer(44 + n * 2), v = new DataView(buf);
+            const str = (o, s) => [...s].forEach((ch, i) => v.setUint8(o + i, ch.charCodeAt(0)));
+            str(0, 'RIFF'); v.setUint32(4, 36 + n * 2, true); str(8, 'WAVE'); str(12, 'fmt ');
+            v.setUint32(16, 16, true); v.setUint16(20, 1, true); v.setUint16(22, 1, true);
+            v.setUint32(24, rate, true); v.setUint32(28, rate * 2, true); v.setUint16(32, 2, true); v.setUint16(34, 16, true);
+            str(36, 'data'); v.setUint32(40, n * 2, true);
+            return URL.createObjectURL(new Blob([buf], { type: 'audio/wav' }));
+        }
         function unlockAudio() {
             try { if (navigator.audioSession) navigator.audioSession.type = 'playback'; } catch (e) { }   // iOS 16.4+: เล่นได้แม้เปิดโหมดเงียบ
+            try {
+                if (!unmuteElem) {
+                    unmuteElem = new Audio(silentWavUrl());
+                    unmuteElem.loop = true;
+                    unmuteElem.setAttribute('playsinline', '');
+                }
+                if (unmuteElem.paused) unmuteElem.play().catch(() => { });
+            } catch (e) { }
             try {
                 audioCtx = audioCtx || new (window.AudioContext || window.webkitAudioContext)();
                 if (audioCtx.state !== 'running') audioCtx.resume();
@@ -1513,11 +1559,14 @@
                 src.start(0);
             } catch (e) { /* เบราว์เซอร์ไม่รองรับเสียง */ }
         }
-        ['pointerdown', 'keydown'].forEach((ev) => document.addEventListener(ev, () => {
-            if (!audioCtx || audioCtx.state !== 'running') unlockAudio();
+        // iOS นับเฉพาะ touchend/click เป็นการแตะที่เปิดเสียงได้ (pointerdown/touchstart ไม่นับ)
+        ['touchend', 'click', 'keydown'].forEach((ev) => document.addEventListener(ev, () => {
+            if (!audioCtx || audioCtx.state !== 'running' || !unmuteElem || unmuteElem.paused) unlockAudio();
         }, true));
         document.addEventListener('visibilitychange', () => {
-            if (document.visibilityState === 'visible' && audioCtx && audioCtx.state !== 'running') audioCtx.resume().catch(() => { });
+            if (document.visibilityState === 'visible') {
+                if (audioCtx && audioCtx.state !== 'running') audioCtx.resume().catch(() => { });
+            } else if (unmuteElem) unmuteElem.pause();
         });
 
         function beep(freq, dur, vol = 0.3, type = 'sine', at = 0) {
@@ -1783,6 +1832,16 @@
             [0, 600, 1200].forEach((ms) => setTimeout(() => playSound('count', true), ms));
             setTimeout(() => playSound('go', true), 1800);
             setTimeout(() => playSound('stop', true), 3000);
+            // แสดงสถานะเสียง ไว้ใช้ไล่ปัญหาเมื่อไม่มีเสียง
+            setTimeout(() => {
+                const el = document.getElementById('pSoundState');
+                const st = audioCtx ? audioCtx.state : 'ไม่รองรับ';
+                const bg = unmuteElem ? (unmuteElem.paused ? 'หยุด' : 'เล่นอยู่') : 'ไม่มี';
+                el.hidden = false;
+                el.textContent = (st === 'running' ? 'ระบบเสียงพร้อม' : `ระบบเสียงยังไม่พร้อม (${st}) ลองกดทดสอบอีกครั้ง`) +
+                    ` · โหมดเล่นสื่อ: ${bg}` + (navigator.audioSession ? ` · audioSession: ${navigator.audioSession.type}` : '') +
+                    ' · ถ้ายังไม่ได้ยิน: เพิ่มเสียงเครื่อง ปิดโหมดเงียบ และตรวจว่าไม่ได้ต่อหูฟัง Bluetooth อื่นอยู่';
+            }, 400);
         });
         document.getElementById('runStop').addEventListener('click', stopRun);
         runSkipBtn.addEventListener('click', () => { if (run && run.phase === 'rest') setPhase('prep'); });
